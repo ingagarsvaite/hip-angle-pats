@@ -3,3 +3,8 @@
 /_archive/
 !programa/index.html
 !programa/app.js
+
+/programa/*
+/_archive/
+!programa/index.html
+!programa/app.js
