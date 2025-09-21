@@ -82,12 +82,35 @@ const ORDER = ['LS','RS','LH','RH','LK','RK'];
 const COLOR = '#ffffff', RADIUS = 8;
 
 // ====== midline poslinkis (origin shift) ======
+// midOffset – lygiagretus visos vidurio linijos poslinkis (leidžia „pataisyti“ automatiką)
 let midOffset = {dx:0, dy:0}; // normalizuotas poslinkis
-function pelvisBasis2D(LH, RH){
-  const x = unit(sub(RH,LH));
-  let midDown = unit({x:-x.y, y:x.x});
-  if (midDown.y < 0) midDown = {x:-midDown.x, y:-midDown.y};
-  return { x, midDown };
+
+// ====== vektorinė geometrija ======
+const sub = (a,b)=>({x:a.x-b.x, y:a.y-b.y});
+const unit = (v)=>{ const n=Math.hypot(v.x,v.y); return n>1e-6?{x:v.x/n,y:v.y/n}:{x:0,y:0}; };
+const dotp = (a,b)=>a.x*b.x + a.y*b.y;
+const ang  = (a,b)=>{ const c=Math.max(-1,Math.min(1,dotp(unit(a),unit(b)))); return Math.acos(c)*180/Math.PI; };
+
+// ====== automatinė vidurio ašis (pečiai → klubai) ======
+// Grąžina: {S_mid, H_mid, midDown}, kur midDown – žemyn nukreipta pečių–klubų ašis
+function bodyMidline(){
+  const S_mid = { x:(P.LS.x+P.RS.x)/2, y:(P.LS.y+P.RS.y)/2 };
+  const H_mid = { x:(P.LH.x+P.RH.x)/2, y:(P.LH.y+P.RH.y)/2 };
+  let midDown = unit(sub(H_mid, S_mid));
+  if (midDown.y < 0) midDown = { x:-midDown.x, y:-midDown.y }; // garantuotai „žemyn“
+  return { S_mid, H_mid, midDown };
+}
+
+// ====== abdukcijos kampas (šlaunis vs vidurio ašis) ======
+function abduction(HIP, KNEE, midDown){ return ang(sub(KNEE,HIP), midDown); }
+const SAFE = { greenMin:30, greenMax:45, yellowMax:60 };
+
+// ====== kampų spalvos ======
+function colorFor(a){
+  if (a < SAFE.greenMin) return '#ea4335';     // <30 red
+  if (a <= SAFE.greenMax) return '#34a853';    // 30–45 green
+  if (a <= SAFE.yellowMax) return '#f9ab00';   // 45–60 yellow
+  return '#ea4335';                            // >60 red
 }
 
 // ====== drag logika (taškai + midline rankenėlė) ======
@@ -96,22 +119,28 @@ let draggingMid = false;
 
 canvas.addEventListener('pointerdown', e=>{
   const {x,y} = toNorm(e);
-  const mid = midPointWithOffset();
+
+  // MID rankenėlė – ties (H_mid + offset), kad pataikyti patogiau per „centrą apačioje“
+  const { H_mid } = bodyMidline();
+  const midHandle = { x:H_mid.x + midOffset.dx, y:H_mid.y + midOffset.dy };
   const tolMid = 0.03;
-  if (SHOW.midHandle && Math.hypot(x - mid.x, y - mid.y) < tolMid){
+  if (SHOW.midHandle && Math.hypot(x - midHandle.x, y - midHandle.y) < tolMid){
     draggingMid = true;
     canvas.setPointerCapture(e.pointerId);
     return;
   }
+
+  // taškų „grab“
   dragKey = hitTest(x,y);
   if (dragKey){ canvas.setPointerCapture(e.pointerId); }
 });
 canvas.addEventListener('pointermove', e=>{
   const {x,y} = toNorm(e);
   if (draggingMid){
-    const baseMid = baseMidPoint();
-    midOffset.dx = x - baseMid.x;
-    midOffset.dy = y - baseMid.y;
+    // Skaičiuojame poslinkį MID rankenėlei pagal dabartinę automatinę bazę
+    const { H_mid } = bodyMidline();
+    midOffset.dx = x - H_mid.x;
+    midOffset.dy = y - H_mid.y;
     draw();
     return;
   }
@@ -138,30 +167,8 @@ function hitTest(x,y){
   return null;
 }
 
-// ====== vektorinė geometrija ======
-const sub = (a,b)=>({x:a.x-b.x, y:a.y-b.y});
-const unit = (v)=>{ const n=Math.hypot(v.x,v.y); return n>1e-6?{x:v.x/n,y:v.y/n}:{x:0,y:0}; };
-const dotp = (a,b)=>a.x*b.x + a.y*b.y;
-const ang  = (a,b)=>{ const c=Math.max(-1,Math.min(1,dotp(unit(a),unit(b)))); return Math.acos(c)*180/Math.PI; };
-
-function abduction(HIP, KNEE, midDown){ return ang(sub(KNEE,HIP), midDown); }
-const SAFE = { greenMin:30, greenMax:45, yellowMax:60 };
-
-// ====== kampų spalvos ======
-function colorFor(a){
-  if (a < SAFE.greenMin) return '#ea4335';     // <30 red
-  if (a <= SAFE.greenMax) return '#34a853';    // 30–45 green
-  if (a <= SAFE.yellowMax) return '#f9ab00';   // 45–60 yellow
-  return '#ea4335';                            // >60 red
-}
-
-// ====== midline bazė + poslinkis ======
-function baseMidPoint(){ return { x:(P.LH.x+P.RH.x)/2, y:(P.LH.y+P.RH.y)/2 }; }
-function midPointWithOffset(){ const b=baseMidPoint(); return { x:b.x+midOffset.dx, y:b.y+midOffset.dy }; }
-
 // ====== TILT (įrenginio pakrypimas) ======
 let tiltDeg = null;       // momentinis pakrypimas (laipsniais)
-let tiltOK = null;        // ar tiltas ≤ 5°
 let sensorsEnabled = false;
 
 function updateTiltBadge(){
@@ -185,7 +192,6 @@ function updateTiltBadge(){
 async function enableSensors(){
   try{
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-      // iOS: must be called in user gesture
       const perm = await DeviceOrientationEvent.requestPermission();
       if (perm !== 'granted') throw new Error('Leidimas nesuteiktas');
     }
@@ -201,64 +207,64 @@ enableSensorsBtn?.addEventListener('click', enableSensors);
 
 /**
  * Heuristika:
- * - Jei ekranas aukštesnis nei platesnis (portrait) – naudojame gamma (L↔R pakrypimas).
+ * - Jei portrait – naudojame gamma (L↔R pakrypimas).
  * - Jei landscape – naudojame beta (Pirmyn↔Atgal).
- * Tai patogu praktikai: „pakrypimas“ ≈ kiek kamera ne lygi horizontui.
  */
 function onDeviceOrientation(e){
   const portrait = window.innerHeight >= window.innerWidth;
-  const primaryTilt = portrait ? (e.gamma ?? 0) : (e.beta ?? 0); // °, apytiksliai
+  const primaryTilt = portrait ? (e.gamma ?? 0) : (e.beta ?? 0); // °
   tiltDeg = Number(primaryTilt) || 0;
-  tiltOK = Math.abs(tiltDeg) <= 5;
   updateTiltBadge();
-  draw(); // atnaujins statusą, jei nori rodyti tilt įspėjimą kartu
+  draw();
 }
 
-// ====== braižymas ======
+// ====== piešimas ======
 function px(p){ return { x:p.x*canvas.width, y:p.y*canvas.height }; }
 
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if (!canvas.width) return;
 
-  const { midDown } = pelvisBasis2D(P.LH, P.RH);
+  // 1) Kūno vidurio ašis pagal pečius ir klubus
+  const { S_mid, H_mid, midDown } = bodyMidline();
+
+  // 2) Kampai (šlaunis vs midDown)
   const aL = abduction(P.LH, P.LK, midDown);
   const aR = abduction(P.RH, P.RK, midDown);
   const avg = (aL + aR) / 2;
 
-  // midline
+  // 3) Vidurio linija (su poslinkiu)
   if (SHOW.midline){
-    const mid = midPointWithOffset();
-    const mpx = px(mid);
+    const S_off = { x:S_mid.x + midOffset.dx, y:S_mid.y + midOffset.dy };
+    const H_off = { x:H_mid.x + midOffset.dx, y:H_mid.y + midOffset.dy };
+    const Spt = px(S_off), Hpt = px(H_off);
+
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(mpx.x, mpx.y);
-    ctx.lineTo(mpx.x + midDown.x*140, mpx.y + midDown.y*140);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Spt.x, Spt.y); ctx.lineTo(Hpt.x, Hpt.y); ctx.stroke();
 
     if (SHOW.midHandle){
-      ctx.beginPath();
-      ctx.arc(mpx.x, mpx.y, 10, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.fill();
-      ctx.font = '12px system-ui';
-      ctx.fillStyle = '#000';
-      ctx.fillText('MID', mpx.x + 12, mpx.y + 4);
+      // MID rankenėlė – ties apatine (klubų) vidurio tašku
+      ctx.beginPath(); ctx.arc(Hpt.x, Hpt.y, 10, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+      ctx.font = '12px system-ui'; ctx.fillStyle = '#000';
+      ctx.fillText('MID', Hpt.x + 12, Hpt.y + 4);
     }
   }
 
-  // šlaunų linijos
+  // 4) Šlaunų linijos
   if (SHOW.lines){
     ctx.lineCap='round'; ctx.lineWidth = 5;
     // kairė
     ctx.strokeStyle = colorFor(aL);
-    let LH=px(P.LH), LK=px(P.LK); ctx.beginPath(); ctx.moveTo(LH.x,LH.y); ctx.lineTo(LK.x,LK.y); ctx.stroke();
+    const LH=px(P.LH), LK=px(P.LK);
+    ctx.beginPath(); ctx.moveTo(LH.x,LH.y); ctx.lineTo(LK.x,LK.y); ctx.stroke();
     // dešinė
     ctx.strokeStyle = colorFor(aR);
-    let RH=px(P.RH), RK=px(P.RK); ctx.beginPath(); ctx.moveTo(RH.x,RH.y); ctx.lineTo(RK.x,RK.y); ctx.stroke();
+    const RH=px(P.RH), RK=px(P.RK);
+    ctx.beginPath(); ctx.moveTo(RH.x,RH.y); ctx.lineTo(RK.x,RK.y); ctx.stroke();
   }
 
-  // taškai
+  // 5) Taškai
   ctx.fillStyle = '#ffffff';
   const groups = [];
   if (SHOW.shoulders) groups.push('LS','RS');
@@ -273,13 +279,13 @@ function draw(){
     ctx.fillStyle = '#ffffff';
   }
 
-  // kampų etiketės
+  // 6) Kampų etiketės
   if (SHOW.labels){
     labelAt(px(P.LH), `${aL.toFixed(0)}°`, colorFor(aL));
     labelAt(px(P.RH), `${aR.toFixed(0)}°`, colorFor(aR));
   }
 
-  // panelė
+  // 7) Panelės tekstai
   abdLVal.textContent = isFinite(aL)? `${aL.toFixed(0)}°` : '–';
   abdRVal.textContent = isFinite(aR)? `${aR.toFixed(0)}°` : '–';
   avgVal.textContent  = isFinite(avg)? `${avg.toFixed(1)}°` : '–';
@@ -287,10 +293,9 @@ function draw(){
   abdRVal.style.color = colorFor(aR);
   avgVal.style.color  = '#ffffff';
 
-  // statusas: kampai + tilt
+  // 8) Statusas (įskaitant tilt)
   let statusMsg = '';
   let statusColor = '#e5e7eb';
-
   const bothGreen = (colorFor(aL)==='#34a853' && colorFor(aR)==='#34a853');
   const over60 = (aL>SAFE.yellowMax || aR>SAFE.yellowMax);
 
@@ -299,7 +304,6 @@ function draw(){
   else if (colorFor(aL)==='#f9ab00' || colorFor(aR)==='#f9ab00'){ statusMsg = 'Įspėjimas: 45–60° (geltona zona).'; statusColor = '#f9ab00'; }
   else if (aL < 30 || aR < 30){ statusMsg = 'Per maža abdukcija (<30°).'; statusColor = '#ea4335'; }
 
-  // Tilt įspėjimas turi prioritetą, jei >5°
   if (tiltDeg != null && Math.abs(tiltDeg) > 5){
     statusMsg = `Telefonas pakreiptas ${tiltDeg.toFixed(1)}° (>5°). Ištiesinkite įrenginį.`;
     statusColor = '#ea4335';
@@ -326,18 +330,19 @@ function labelAt(pt, text, col){
 // pradžia
 draw();
 
-// ====== vienkartinis įrašymas ======
+// ====== vienkartinis įrašymas (vienas failas su vienu įrašu kiekvieną kartą) ======
 let data = [];
 startRecBtn.addEventListener('click', ()=>{
   if (bar) bar.style.width = '100%';
 
-  // Blokuojam, jei tilt > 5° (vartotojas gali patvirtinti, jei vis tiek nori)
+  // Įspėjimas, jei pakrypimas > 5°
   if (tiltDeg != null && Math.abs(tiltDeg) > 5){
     const proceed = confirm(`Telefonas pakreiptas ${tiltDeg.toFixed(1)}° (>5°).\nAr tikrai norite išsaugoti?`);
     if (!proceed) return;
   }
 
-  const { midDown } = pelvisBasis2D(P.LH, P.RH);
+  // Kampai pagal automatinę pečių–klubų ašį
+  const { S_mid, H_mid, midDown } = bodyMidline();
   const aL = abduction(P.LH, P.LK, midDown);
   const aR = abduction(P.RH, P.RK, midDown);
   const now = Date.now();
@@ -353,6 +358,10 @@ startRecBtn.addEventListener('click', ()=>{
       tiltDeg: tiltDeg == null ? null : +tiltDeg.toFixed(2),
       tiltOK: tiltDeg == null ? null : (Math.abs(tiltDeg) <= 5)
     },
+    midline: {
+      from: { x:+(S_mid.x+midOffset.dx).toFixed(4), y:+(S_mid.y+midOffset.dy).toFixed(4) },
+      to:   { x:+(H_mid.x+midOffset.dx).toFixed(4), y:+(H_mid.y+midOffset.dy).toFixed(4) }
+    },
     midlineOffset: { dx: +midOffset.dx.toFixed(4), dy: +midOffset.dy.toFixed(4) },
     landmarks: {
       leftShoulder:  {...P.LS},
@@ -363,15 +372,20 @@ startRecBtn.addEventListener('click', ()=>{
       rightKnee:     {...P.RK}
     }
   };
-  data.push(rec);
+  data = [rec]; // laikome tik paskutinį įrašą viename faile
 
   if (aL>60 || aR>60){
     alert('Dėmesio: kurio nors šlaunies abdukcija > 60°. Patikrinkite padėtį.');
   }
-  dlBtn.disabled = data.length===0;
+
+  // Įjungiam download mygtuką ir automatiškai inicijuojam atsisiuntimą (vienas failas)
+  dlBtn.disabled = false;
+  autoDownloadJSON();
 });
 
-dlBtn.addEventListener('click', ()=>{
+dlBtn.addEventListener('click', ()=>autoDownloadJSON());
+
+function autoDownloadJSON(){
   if (!data.length) return;
   const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -379,4 +393,4 @@ dlBtn.addEventListener('click', ()=>{
   a.href = url; a.download = `pose_single_${new Date().toISOString().replace(/:/g,'-')}.json`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-});
+}
