@@ -31,6 +31,9 @@
     .pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
     .pill{padding:4px 8px;border-radius:999px;background:#111827;font-size:12px;border:1px solid #1f2937;cursor:pointer}
     .pill.active{background:#1d4ed8;border-color:#1d4ed8}
+    #statusMsg{margin-top:8px;font-weight:700}
+    #tiltRow{display:flex;gap:8px;align-items:center;margin-top:8px}
+    #tiltBadge{padding:2px 8px;border-radius:999px;background:#111827;border:1px solid #1f2937;font-size:12px}
   </style>
 </head>
 <body>
@@ -38,10 +41,15 @@
   <main>
     <div class="card">
       <div class="note" style="margin-bottom:10px">
-        1) Spausk <button id="startCam" class="btn" style="padding:6px 10px">Leisti kamerą</button> ir naršyklėje „Allow“. <br/>
-        2) **Tempk taškus**: LS/RS (pečiai), LH/RH (klubai), LK/RK (keliai). <br/>
-        3) Kampai skaičiuojami iš **HIP→KNEE** vs **dubens vidurio linija**. <br/>
-        4) „Pradėti įrašą“ – **2 s** kas **10 ms**, tada atsisiųsk JSON.
+        1) Spausk <button id="startCam" class="btn" style="padding:6px 10px">Leisti kamerą</button> (pirma paprašys įvesti paciento/tyrimo kodą).<br/>
+        2) Tempk taškus: LS/RS (pečiai), LH/RH (klubai), LK/RK (keliai).<br/>
+        3) Dubens vidurio liniją galima perstumti, pajudinus „MID“ rankenėlę centre.<br/>
+        4) „Išsaugoti 1 įrašą“ – iš karto išsaugos vieną matavimą (be 2 s įrašymo).<br/>
+        5) Atsisiųsk JSON su koordinatėmis, abduction L/R ir paciento kodu.
+      </div>
+      <div id="tiltRow">
+        <button id="enableSensors" class="btn" style="padding:6px 10px">Įjungti lygio jutiklį</button>
+        <span id="tiltBadge">Pakrypimas: –</span>
       </div>
     </div>
 
@@ -51,13 +59,13 @@
     </div>
 
     <div class="card panel">
-      <div class="kv">
-        <div class="lbl">Vidurkis</div><div id="avgVal" class="val">–</div>
-      </div>
+      <div class="kv"><div class="lbl">Vidurkis</div><div id="avgVal" class="val">–</div></div>
       <div class="row" style="gap:12px">
         <div class="kv" style="flex:1"><div class="lbl">Abd L</div><div id="abdL" class="val">–</div></div>
         <div class="kv" style="flex:1"><div class="lbl">Abd R</div><div id="abdR" class="val">–</div></div>
       </div>
+
+      <div id="statusMsg"></div>
 
       <div class="pills">
         <div class="pill active" data-show="shoulders">Show shoulders</div>
@@ -66,11 +74,12 @@
         <div class="pill active" data-show="lines">Show lines</div>
         <div class="pill active" data-show="midline">Show pelvis midline</div>
         <div class="pill active" data-show="labels">Show angle labels</div>
+        <div class="pill active" data-show="midHandle">Move midline handle</div>
       </div>
 
       <div class="progress" style="margin:10px 0"><div id="bar"></div></div>
       <div class="row">
-        <button id="startRec" class="btn">Pradėti įrašą (2 s)</button>
+        <button id="startRec" class="btn">Išsaugoti 1 įrašą</button>
         <button id="dl" class="btn" disabled>Atsisiųsti JSON</button>
       </div>
     </div>
@@ -79,3 +88,4 @@
   </main>
 </body>
 </html>
+
