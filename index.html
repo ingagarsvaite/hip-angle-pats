@@ -43,9 +43,9 @@
       <div class="note" style="margin-bottom:10px">
         1) Spausk <button id="startCam" class="btn" style="padding:6px 10px">Leisti kamerą</button> (pirma paprašys įvesti paciento/tyrimo kodą).<br/>
         2) Tempk taškus: LS/RS (pečiai), LH/RH (klubai), LK/RK (keliai).<br/>
-        3) Dubens vidurio liniją galima perstumti, pajudinus „MID“ rankenėlę centre.<br/>
-        4) „Išsaugoti 1 įrašą“ – iš karto išsaugos vieną matavimą (be 2 s įrašymo).<br/>
-        5) Atsisiųsk JSON su koordinatėmis, abduction L/R ir paciento kodu.
+        3) Vidurio linija automatiškai eina tarp pečių ir klubų vidurio, bet gali ją perstumti „MID“ rankenėle.<br/>
+        4) „Išsaugoti 1 įrašą“ – iš karto išsaugos vieną matavimą (vienas JSON failas).<br/>
+        5) Atsisiųsk JSON su koordinatėmis, abduction L/R, paciento kodu ir pakrypimu.
       </div>
       <div id="tiltRow">
         <button id="enableSensors" class="btn" style="padding:6px 10px">Įjungti lygio jutiklį</button>
@@ -71,10 +71,10 @@
         <div class="pill active" data-show="shoulders">Show shoulders</div>
         <div class="pill active" data-show="hips">Show hips</div>
         <div class="pill active" data-show="knees">Show knees</div>
-        <div class="pill active" data-show="lines">Show lines</div>
-        <div class="pill active" data-show="midline">Show pelvis midline</div>
+        <div class="pill active" data-show="lines">Show thigh lines</div>
+        <div class="pill active" data-show="midline">Show midline</div>
         <div class="pill active" data-show="labels">Show angle labels</div>
-        <div class="pill active" data-show="midHandle">Move midline handle</div>
+        <div class="pill active" data-show="midHandle">Move mid handle</div>
       </div>
 
       <div class="progress" style="margin:10px 0"><div id="bar"></div></div>
@@ -88,4 +88,5 @@
   </main>
 </body>
 </html>
+
 
