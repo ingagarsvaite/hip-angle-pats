@@ -1,0 +1,5 @@
+
+/programa/*
+/_archive/
+!programa/index.html
+!programa/app.js
